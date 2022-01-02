@@ -8,6 +8,8 @@
     3:turn on debug
     4:test deploy/deploy when not armed
     5:transferr all data
+    6:crreate new file
+    7:calibrate baseline pressure
 */
 
 //imports
@@ -94,7 +96,7 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 void takereadings(data1 *pdata) {
   VectorFloat gravity;    // [x, y, z]            gravity vector
   float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
- 
+
   Quaternion q;           // [w, x, y, z]         quaternion container
 
   //ypr
@@ -291,11 +293,19 @@ void loop() {
         File datafile = SD.open(filename);
 
         int count = 0;
-        while (count = datafile.readBytes(fifoBuffer, sizeof(fifoBuffer)) > 0){
+        while (count = datafile.readBytes(fifoBuffer, sizeof(fifoBuffer)) > 0) {
           radio.write(&fifoBuffer, count);
         }
         s_data.current_stat = 3; //notify controler transfer done
       }
+      if (r_data.message == 6) {
+        createnewfile();
+        r_data.message = 999;
+      }
+      if (r_data.message==7){
+        baseline = getPressure();
+        r_data.message = 999;
+        }
     }
   }
 
