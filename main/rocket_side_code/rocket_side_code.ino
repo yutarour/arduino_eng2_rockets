@@ -42,12 +42,10 @@ MPU6050 mpu;
 #define servo_init 0
 
 const char* comma = ",";
-const char* txtExtension = ".txt";
 
 //rocket status vars
 int done_setups = 0;
 int arm_time;
-bool armed = false;
 
 //pressure
 double baseline;
@@ -57,17 +55,15 @@ double baseline;
 
 //sd
 int filenumber = 0;
-const int chipSelect = 4;
-String buff;
-
+#define chipSelect 4
 //sensor reading values
 //data1 aka the sending data
 struct data1 {
   int ypr[3];
-  double alt;
-  double pres;
+  float alt;
+  float pres;
   int flight_time;
-  double tem;
+  int tem;
   float ppm;
   int current_stat; //0= not ready 1=ready 2=transfer data ongoing 3= file transfer done 4=setup done
 };
@@ -79,14 +75,11 @@ struct data2 {
 };
 
 //initializing the structures
-data2 r_data;
 
 
 //initializing vars
-RF24 radio(10,9);
-File datafile;
+RF24 radio(10, 9);
 SFE_BMP180 pressure;
-MQ135 mq_135(mq135_pin);
 Servo myservo;
 
 
@@ -95,19 +88,13 @@ Servo myservo;
 void dmpDataReady() {
 }
 
-//rf
-void senddata(const data1 *pdata) {
-  radio.stopListening();
-  radio.write(pdata, sizeof(data1));
-  radio.startListening();
-}
-
+uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 //sensors
 void takereadings(data1 *pdata) {
   VectorFloat gravity;    // [x, y, z]            gravity vector
   float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-  uint8_t fifoBuffer[64]; // FIFO storage buffer
+ 
   Quaternion q;           // [w, x, y, z]         quaternion container
 
   //ypr
@@ -126,15 +113,17 @@ void takereadings(data1 *pdata) {
   pdata->alt = pressure.altitude(pdata->pres, baseline);
   pressure.getTemperature(T);
   pdata->tem = T;
-  float ppm = mq_135.getCorrectedPPM(T, 70.0);
-  pdata->ppm = ppm;
+  MQ135 mq_135(mq135_pin);
+  pdata->ppm = mq_135.getCorrectedPPM(T, 70.0);
+
+  pdata->flight_time = millis() - arm_time;
 }
 
 //bmp
-double getPressure()
+float getPressure()
 {
   char status;
-  double T, P, p0, a;
+  double T, P;
   status = pressure.startTemperature();
   if (status != 0)
   {
@@ -159,7 +148,7 @@ double getPressure()
       if (status != 0)
       {
         // Wait for the measurement to complete:
-        delay(status);
+        //delay(status); //suspicious
 
         // Retrieve the completed pressure measurement:
         // Note that the measurement is stored in the variable P.
@@ -187,13 +176,23 @@ void deploy() {
 }
 
 //sd
+String filename;
 void createnewfile() {
-  while (SD.exists(String(filenumber) + txtExtension)) {
-    filenumber++;
+  while (true) {
+    filename = String(filenumber);
+    if (SD.exists(filename))
+    {
+      filenumber++;
+    }
+    else
+    {
+      File datafile = SD.open(filename, FILE_WRITE);
+      datafile.println("tm,pres,alt,y,p,r,tem,ppm");
+      datafile.close();
+      return;
+    }
   };
-  datafile = SD.open(String(filenumber), FILE_WRITE);
-  datafile.println("tm,pres,alt,y,p,r,tem,ppm");
-};
+}
 
 void setup() {
   createnewfile();
@@ -229,8 +228,8 @@ void setup() {
     done_setups++;
   }
 
-  radio.openWritingPipe((uint64_t)(byte *)("02"));
-  radio.openReadingPipe(1, (uint64_t)(byte *)("01"));
+  radio.openWritingPipe(0xffff02);
+  radio.openReadingPipe(1, 0xffff01);
   radio.setPALevel(RF24_PA_MAX);
   //channel 35 has the least chatter on it
   radio.setChannel(35);
@@ -245,14 +244,32 @@ void setup() {
     done_setups++;
 }
 
+void printFloat(File *datafile, float fl, bool fComma)
+{
+  datafile->print(String(fl));
 
+  if (fComma)
+    datafile->print(comma);
+}
+
+void printInt(File *datafile, int i)
+{
+  datafile->print(String(i));
+  datafile->print(comma);
+}
 
 void loop() {
   data1 s_data;
+  data2 r_data;
+  bool armed = false;
+
   takereadings(&s_data);
   //send data only if armed is false because this clogs the data collection. when armed rocket will only listen and send nothing.
   if (armed == false) {
-    senddata(&s_data);
+    radio.stopListening();
+    radio.write(&s_data, sizeof(data1));
+    radio.startListening();
+
     if (radio.available()) {
       radio.read(&r_data, sizeof(r_data));
       if (r_data.message == 1) {
@@ -271,10 +288,11 @@ void loop() {
         radio.stopListening();
         s_data.current_stat = 2;
         radio.write(&s_data, sizeof(s_data)); //to notify status of rocket
-        datafile = SD.open(String(filenumber) + txtExtension);
-        while (datafile.available()) {
-          buff = datafile.readStringUntil('\n');
-          radio.write(&buff, sizeof(buff));
+        File datafile = SD.open(filename);
+
+        int count = 0;
+        while (count = datafile.readBytes(fifoBuffer, sizeof(fifoBuffer)) > 0){
+          radio.write(&fifoBuffer, count);
         }
         s_data.current_stat = 3; //notify controler transfer done
       }
@@ -283,20 +301,17 @@ void loop() {
 
   while (armed) {
     takereadings(&s_data);
-    s_data.flight_time=millis()-arm_time;
-    datafile = SD.open(String(filenumber) + ".txt", FILE_WRITE);
-    datafile.println(
-      String(s_data.flight_time) + comma + 
-      String(s_data.pres) + comma +
-      String(s_data.alt) + comma +
-      String(s_data.ypr[0]) + comma +
-      String(s_data.ypr[1]) + comma + 
-      String(s_data.ypr[2]) + comma +
-      String(s_data.tem) + comma +
-      String(s_data.ppm));
-    datafile.close();
-    
 
+    File datafile = SD.open(filename, FILE_WRITE);
+    printInt(&datafile, s_data.flight_time);
+    printFloat(&datafile, s_data.pres, false);
+    printFloat(&datafile, s_data.alt, false);
+    printInt(&datafile, s_data.ypr[0]);
+    printInt(&datafile, s_data.ypr[1]);
+    printInt(&datafile, s_data.ypr[2]);
+    printInt(&datafile, s_data.tem);
+    printFloat(&datafile, s_data.ppm, true);
+    datafile.close();
 
     radio.read(&r_data, sizeof(r_data));
     if (r_data.message == 3) {
