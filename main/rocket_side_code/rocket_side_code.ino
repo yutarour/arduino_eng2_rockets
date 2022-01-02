@@ -35,17 +35,17 @@
 #define INTERRUPT_PIN 2
 MPU6050 mpu;
 #define OUTPUT_READABLE_YAWPITCHROLL
-int mpuIntStatus;   // holds actual interrupt status byte from MPU
-volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 
 //servo
-const int servopin = 0;
-const int servo_rot = 90;
-const int servo_init = 0;
+#define servopin 0
+#define servo_rot 90
+#define servo_init 0
+
+const char* comma = ",";
+const char* txtExtension = ".txt";
 
 //rocket status vars
 int done_setups = 0;
-bool setup_done = false;
 int arm_time;
 bool armed = false;
 
@@ -79,7 +79,6 @@ struct data2 {
 };
 
 //initializing the structures
-data1 s_data;
 data2 r_data;
 
 
@@ -94,19 +93,18 @@ Servo myservo;
 //functions
 //gyro
 void dmpDataReady() {
-  mpuInterrupt = true;
 }
 
 //rf
-void senddata() {
+void senddata(const data1 *pdata) {
   radio.stopListening();
-  radio.write(&s_data, sizeof(s_data));
+  radio.write(pdata, sizeof(data1));
   radio.startListening();
 }
 
 
 //sensors
-void takereadings() {
+void takereadings(data1 *pdata) {
   VectorFloat gravity;    // [x, y, z]            gravity vector
   float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
   uint8_t fifoBuffer[64]; // FIFO storage buffer
@@ -119,17 +117,17 @@ void takereadings() {
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 
     //convvert from rad to deg
-    s_data.ypr[0] = ypr[0] * 180 / M_PI;
-    s_data.ypr[1] = ypr[1] * 180 / M_PI;
-    s_data.ypr[2] = ypr[2] * 180 / M_PI;
+    pdata->ypr[0] = ypr[0] * 180 / M_PI;
+    pdata->ypr[1] = ypr[1] * 180 / M_PI;
+    pdata->ypr[2] = ypr[2] * 180 / M_PI;
   }
   double T;
-  s_data.pres = getPressure();
-  s_data.alt = pressure.altitude(s_data.pres, baseline);
+  pdata->pres = getPressure();
+  pdata->alt = pressure.altitude(pdata->pres, baseline);
   pressure.getTemperature(T);
-  s_data.tem = T;
+  pdata->tem = T;
   float ppm = mq_135.getCorrectedPPM(T, 70.0);
-  s_data.ppm = ppm;
+  pdata->ppm = ppm;
 }
 
 //bmp
@@ -190,7 +188,7 @@ void deploy() {
 
 //sd
 void createnewfile() {
-  while (SD.exists(String(filenumber) + ".txt")) {
+  while (SD.exists(String(filenumber) + txtExtension)) {
     filenumber++;
   };
   datafile = SD.open(String(filenumber), FILE_WRITE);
@@ -220,7 +218,7 @@ void setup() {
   // turn on the DMP, now that it's ready
   mpu.setDMPEnabled(true);
   attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
-  mpuIntStatus = mpu.getIntStatus();
+  mpu.getIntStatus();
 
   done_setups++;
   // get expected DMP packet size for later comparison
@@ -231,8 +229,8 @@ void setup() {
     done_setups++;
   }
 
-  radio.openWritingPipe((uint64_t)(byte *)(F("02")));
-  radio.openReadingPipe(1, (uint64_t)(byte *)(F("01")));
+  radio.openWritingPipe((uint64_t)(byte *)("02"));
+  radio.openReadingPipe(1, (uint64_t)(byte *)("01"));
   radio.setPALevel(RF24_PA_MAX);
   //channel 35 has the least chatter on it
   radio.setChannel(35);
@@ -245,22 +243,16 @@ void setup() {
 
   if (pressure.begin())
     done_setups++;
-
-
-  if (done_setups == 4) {
-    setup_done = true;
-    s_data.current_stat = 4;
-  }
 }
 
 
 
 void loop() {
-
-  takereadings();
+  data1 s_data;
+  takereadings(&s_data);
   //send data only if armed is false because this clogs the data collection. when armed rocket will only listen and send nothing.
   if (armed == false) {
-    senddata();
+    senddata(&s_data);
     if (radio.available()) {
       radio.read(&r_data, sizeof(r_data));
       if (r_data.message == 1) {
@@ -279,7 +271,7 @@ void loop() {
         radio.stopListening();
         s_data.current_stat = 2;
         radio.write(&s_data, sizeof(s_data)); //to notify status of rocket
-        datafile = SD.open(String(filenumber) + ".txt");
+        datafile = SD.open(String(filenumber) + txtExtension);
         while (datafile.available()) {
           buff = datafile.readStringUntil('\n');
           radio.write(&buff, sizeof(buff));
@@ -288,11 +280,20 @@ void loop() {
       }
     }
   }
+
   while (armed) {
-    takereadings();
+    takereadings(&s_data);
     s_data.flight_time=millis()-arm_time;
     datafile = SD.open(String(filenumber) + ".txt", FILE_WRITE);
-    datafile.println(String(s_data.flight_time)+","+String(s_data.pres)+","+String(s_data.alt)+","+String(s_data.ypr[0])+","+String(s_data.ypr[1])+","+String(s_data.ypr[2])+","+String(s_data.tem)+","+String(s_data.ppm));
+    datafile.println(
+      String(s_data.flight_time) + comma + 
+      String(s_data.pres) + comma +
+      String(s_data.alt) + comma +
+      String(s_data.ypr[0]) + comma +
+      String(s_data.ypr[1]) + comma + 
+      String(s_data.ypr[2]) + comma +
+      String(s_data.tem) + comma +
+      String(s_data.ppm));
     datafile.close();
     
 
