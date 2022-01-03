@@ -4,10 +4,10 @@
     <img src="assets/logo.png" alt="Logo" width="200" height="200">
   </a>
 
-  <h3 align="center">ReadME Generator</h3>
+  <h3 align="center">Arduino Bottle Rockets</h3>
 
   <p align="center">
-    An Awesome ReadME Generator To Jumpstart Your Projects!
+    Arduino rockets with sensors. 
     <br/>
     <br/>
     <a href="https://github.com/Yaurrdautia/arduino_eng2_rockets/issues">Report Bug</a>
