@@ -16,7 +16,7 @@
   </p>
 </p>
 
-## TOC
+## Table Of Contents
 
 * [About the Project](#about-the-project)
 * [Built With](#built-with)
@@ -97,7 +97,7 @@ Contributions are what make the open source community such an amazing place to b
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](https://github.com/Yaurrdautia/arduino_eng2_rockets/LICENSE.md) for more information.
+Distributed under the MIT License. See [LICENSE](https://github.com/Yaurrdautia/arduino_eng2_rockets/blob/main/LICENSE) for more information.
 
 ## Authors
 
