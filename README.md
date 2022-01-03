@@ -1,7 +1,7 @@
 <br/>
 <p align="center">
-  <a href="https://github.com/ShaanCoding/ReadME-Generator">
-    <img src="assets/logo.png" alt="Logo" width="80" height="80">
+  <a href="https://github.com/Yaurrdautia/arduino_eng2_rockets">
+    <img src="assets/logo.png" alt="Logo" width="100" height="100">
   </a>
 
   <h3 align="center">ReadME Generator</h3>
@@ -10,9 +10,9 @@
     An Awesome ReadME Generator To Jumpstart Your Projects!
     <br/>
     <br/>
-    <a href="https://github.com/ShaanCoding/ReadME-Generator/issues">Report Bug</a>
+    <a href="https://github.com/Yaurrdautia/arduino_eng2_rockets/issues">Report Bug</a>
     .
-    <a href="https://github.com/ShaanCoding/ReadME-Generator/issues">Request Feature</a>
+    <a href="https://github.com/Yaurrdautia/arduino_eng2_rockets/issues">Request Feature</a>
   </p>
 </p>
 
@@ -77,12 +77,12 @@ Used to log some simple data using Arduino Uno and a rocket made with two liter 
 
 ## Roadmap
 
-See the [open issues](https://github.com/ShaanCoding/ReadME-Generator/issues) for a list of proposed features (and known issues).
+See the [open issues](https://github.com/Yaurrdautia/arduino_eng2_rockets/issues) for a list of proposed features (and known issues).
 
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-* If you have suggestions for adding or removing projects, feel free to [open an issue](https://github.com/ShaanCoding/ReadME-Generator/issues/new) to discuss it, or directly create a pull request after you edit the *README.md* file with necessary changes.
+* If you have suggestions for adding or removing projects, feel free to [open an issue](https://github.com/Yaurrdautia/arduino_eng2_rockets/issues/new) to discuss it, or directly create a pull request after you edit the *README.md* file with necessary changes.
 * Please make sure you check your spelling and grammar.
 * Create individual PR for each suggestion.
 * Please also read through the [Code Of Conduct](https://github.com/ShaanCoding/ReadME-Generator/blob/main/CODE_OF_CONDUCT.md) before posting your first idea as well.
@@ -97,7 +97,7 @@ Contributions are what make the open source community such an amazing place to b
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](https://github.com/ShaanCoding/ReadME-Generator/blob/main/LICENSE.md) for more information.
+Distributed under the MIT License. See [LICENSE](https://github.com/Yaurrdautia/arduino_eng2_rockets/LICENSE.md) for more information.
 
 ## Authors
 
