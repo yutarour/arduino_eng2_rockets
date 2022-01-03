@@ -1,6 +1,7 @@
 /*
    Main rocket progeam.
    This code is for putting on the rocket.
+   No copy this code.
    command list also lives up here:
    to rocket:
     1:arm rocket
