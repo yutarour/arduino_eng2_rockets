@@ -309,10 +309,14 @@ void loop() {
         }
     }
   }
-
+  //make this int if too big. 
+  float prevalt;
   while (armed) {
+    prevalt = s_data.alt;
     takereadings(&s_data);
-
+    if (s_data.alt-prevalt>0.5){
+      deploy();
+      }
     File datafile = SD.open(filename, FILE_WRITE);
     printInt(&datafile, s_data.flight_time);
     printFloat(&datafile, s_data.pres, false);
