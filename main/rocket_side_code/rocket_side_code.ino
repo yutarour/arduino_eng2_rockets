@@ -198,6 +198,7 @@ void createnewfile() {
 }
 
 void setup() {
+  Serial.begin(9600);
   createnewfile();
   //gyro comment out serial stuff later
   myservo.attach(servopin);
@@ -263,10 +264,11 @@ void printInt(File *datafile, int i)
 
 void loop() {
   data1 s_data;
-  data2 r_data;
+  data2 r_data; 
   bool armed = false;
 
   takereadings(&s_data);
+  Serial.println(s_data.pres);
   //send data only if armed is false because this clogs the data collection. when armed rocket will only listen and send nothing.
   if (armed == false) {
     radio.stopListening();
