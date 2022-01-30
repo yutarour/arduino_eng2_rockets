@@ -12,10 +12,16 @@
     6:crreate new file
     7:calibrate baseline pressure
 */
+#include <DigitalIO.h>
+//debug
+#define debug true
+
+#define chipSelect 4
+
+#define nrf_ce 2
+#define nrf_csn 3
 
 //imports
-//gyro
-#include "MPU6050_6Axis_MotionApps20.h"
 #include "Wire.h"
 
 //sd
@@ -34,13 +40,8 @@
 #include <SFE_BMP180.h>
 
 //variables and definitions and pins
-//gyro
-#define INTERRUPT_PIN 2
-MPU6050 mpu;
-#define OUTPUT_READABLE_YAWPITCHROLL
-
 //servo
-#define servopin 0
+#define servopin 8
 #define servo_rot 90
 #define servo_init 0
 
@@ -58,11 +59,9 @@ double baseline;
 
 //sd
 int filenumber = 0;
-#define chipSelect 4
 //sensor reading values
 //data1 aka the sending data
 struct data1 {
-  int ypr[3];
   float alt;
   float pres;
   int flight_time;
@@ -81,43 +80,19 @@ struct data2 {
 
 
 //initializing vars
-RF24 radio(10, 9);
+RF24 radio(nrf_ce, nrf_csn);
 SFE_BMP180 pressure;
 Servo myservo;
 
-
-//functions
-//gyro
-void dmpDataReady() {
-}
-
-uint8_t fifoBuffer[64]; // FIFO storage buffer
-
 //sensors
 void takereadings(data1 *pdata) {
-  VectorFloat gravity;    // [x, y, z]            gravity vector
-  float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-
-  Quaternion q;           // [w, x, y, z]         quaternion container
-
-  //ypr
-  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-
-    //convvert from rad to deg
-    pdata->ypr[0] = ypr[0] * 180 / M_PI;
-    pdata->ypr[1] = ypr[1] * 180 / M_PI;
-    pdata->ypr[2] = ypr[2] * 180 / M_PI;
-  }
   double T;
   pdata->pres = getPressure();
   pdata->alt = pressure.altitude(pdata->pres, baseline);
   pressure.getTemperature(T);
   pdata->tem = T;
   MQ135 mq_135(mq135_pin);
-  pdata->ppm = mq_135.getCorrectedPPM(T, 70.0);
+  pdata->ppm = mq_135.getCorrectedPPM(T, pdata->tem);
 
   pdata->flight_time = millis() - arm_time;
 }
@@ -151,7 +126,7 @@ float getPressure()
       if (status != 0)
       {
         // Wait for the measurement to complete:
-        //delay(status); //suspicious
+        delay(status); //suspicious
 
         // Retrieve the completed pressure measurement:
         // Note that the measurement is stored in the variable P.
@@ -164,6 +139,7 @@ float getPressure()
         if (status != 0)
         {
           return (P);
+          //Serial.print(P*0.0295333727,2);
         }
 
       }
@@ -183,6 +159,7 @@ String filename;
 void createnewfile() {
   while (true) {
     filename = String(filenumber);
+    Serial.println("New file creation func run");
     if (SD.exists(filename))
     {
       filenumber++;
@@ -190,7 +167,9 @@ void createnewfile() {
     else
     {
       File datafile = SD.open(filename, FILE_WRITE);
-      datafile.println("tm,pres,alt,y,p,r,tem,ppm");
+      Serial.print("New file created");
+      Serial.println(filename);
+      datafile.println("tm,pres,alt,tem,ppm");
       datafile.close();
       return;
     }
@@ -204,32 +183,21 @@ void setup() {
   myservo.attach(servopin);
   myservo.write(servo_init);
   // put your setup code here, to run once:
-  Wire.begin();
-  mpu.initialize();
-  pinMode(INTERRUPT_PIN, INPUT);
-  mpu.dmpInitialize();
-  // supply your own gyro offsets here, scaled for min sensitivity
-  mpu.setXGyroOffset(220);
-  mpu.setYGyroOffset(76);
-  mpu.setZGyroOffset(-85);
-  mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
-
-  // Calibration Time: generate offsets and calibrate our MPU6050
-  mpu.CalibrateAccel(6);
-  mpu.CalibrateGyro(6);
-  mpu.PrintActiveOffsets();
-  // turn on the DMP, now that it's ready
-  mpu.setDMPEnabled(true);
-  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
-  mpu.getIntStatus();
-
+  if (pressure.begin()) {
+    Serial.println("Succcess");
+  }
   done_setups++;
   // get expected DMP packet size for later comparison
-  (void)mpu.dmpGetFIFOPacketSize();
 
+#ifdef debug
+  Serial.println("Setup running");
+#endif
   //rf init
   if (radio.begin()) {
     done_setups++;
+#ifdef debug
+    Serial.println("Radio success");
+#endif
   }
 
   radio.openWritingPipe(0xffff02);
@@ -241,12 +209,17 @@ void setup() {
 
   if (SD.begin(chipSelect)) {
     done_setups++;
+#ifdef debug
+    Serial.println("Sd card setup done");
+#endif
     // don't do anything more:
   };
 
   if (pressure.begin())
     done_setups++;
+
 }
+
 
 void printFloat(File *datafile, float fl, bool fComma)
 {
@@ -264,11 +237,10 @@ void printInt(File *datafile, int i)
 
 void loop() {
   data1 s_data;
-  data2 r_data; 
+  data2 r_data;
   bool armed = false;
 
   takereadings(&s_data);
-  Serial.println(s_data.pres);
   //send data only if armed is false because this clogs the data collection. when armed rocket will only listen and send nothing.
   if (armed == false) {
     radio.stopListening();
@@ -276,6 +248,7 @@ void loop() {
     radio.startListening();
 
     if (radio.available()) {
+
       radio.read(&r_data, sizeof(r_data));
       if (r_data.message == 1) {
         armed = true;
@@ -295,9 +268,10 @@ void loop() {
         radio.write(&s_data, sizeof(s_data)); //to notify status of rocket
         File datafile = SD.open(filename);
 
-        int count = 0;
-        while (count = datafile.readBytes(fifoBuffer, sizeof(fifoBuffer)) > 0) {
-          radio.write(&fifoBuffer, count);
+
+        while (datafile.available()) {
+          char file_content = datafile.read();
+          radio.write(&file_content, sizeof(file_content));
         }
         s_data.current_stat = 3; //notify controler transfer done
       }
@@ -305,31 +279,28 @@ void loop() {
         createnewfile();
         r_data.message = 999;
       }
-      if (r_data.message==7){
+      if (r_data.message == 7) {
         baseline = getPressure();
         r_data.message = 999;
-        }
+      }
     }
   }
-  //make this int if too big. 
+  //make this int if too big.
   float prevalt;
   while (armed) {
-    prevalt = s_data.alt;
+    prevalt = s_data.pres;
     takereadings(&s_data);
-    if (s_data.alt-prevalt>0.5){
+    if (s_data.pres - prevalt > 0.5) {
       deploy();
-      }
+    }
+    
     File datafile = SD.open(filename, FILE_WRITE);
     printInt(&datafile, s_data.flight_time);
     printFloat(&datafile, s_data.pres, false);
     printFloat(&datafile, s_data.alt, false);
-    printInt(&datafile, s_data.ypr[0]);
-    printInt(&datafile, s_data.ypr[1]);
-    printInt(&datafile, s_data.ypr[2]);
     printInt(&datafile, s_data.tem);
     printFloat(&datafile, s_data.ppm, true);
     datafile.close();
-
     radio.read(&r_data, sizeof(r_data));
     if (r_data.message == 3) {
       deploy();
