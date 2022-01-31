@@ -41,15 +41,15 @@
 
 //variables and definitions and pins
 //servo
-#define servopin 8
-#define servo_rot 90
-#define servo_init 0
+#define servopin 6
+#define servo_rot 0
+#define servo_init 120
 
 const char* comma = ",";
 
 //rocket status vars
 int done_setups = 0;
-int arm_time;
+double arm_time;
 
 //pressure
 double baseline;
@@ -64,7 +64,7 @@ int filenumber = 0;
 struct data1 {
   float alt;
   float pres;
-  int flight_time;
+  double flight_time;
   int tem;
   float ppm;
   int current_stat; //0= not ready 1=ready 2=transfer data ongoing 3= file transfer done 4=setup done
@@ -83,6 +83,7 @@ struct data2 {
 RF24 radio(nrf_ce, nrf_csn);
 SFE_BMP180 pressure;
 Servo myservo;
+File datafile;
 
 //sensors
 void takereadings(data1 *pdata) {
@@ -150,7 +151,7 @@ float getPressure()
 //servo
 void deploy() {
   myservo.write(servo_rot);
-  delay(200);
+  delay(600);
   myservo.write(servo_init);
 }
 
@@ -166,7 +167,7 @@ void createnewfile() {
     }
     else
     {
-      File datafile = SD.open(filename, FILE_WRITE);
+      datafile = SD.open(filename, FILE_WRITE);
       Serial.print("New file created");
       Serial.println(filename);
       datafile.println("tm,pres,alt,tem,ppm");
@@ -178,7 +179,6 @@ void createnewfile() {
 
 void setup() {
   Serial.begin(9600);
-  createnewfile();
   //gyro comment out serial stuff later
   myservo.attach(servopin);
   myservo.write(servo_init);
@@ -207,17 +207,14 @@ void setup() {
   radio.setChannel(35);
   radio.setDataRate(RF24_250KBPS);
 
-  if (SD.begin(chipSelect)) {
-    done_setups++;
-#ifdef debug
-    Serial.println("Sd card setup done");
-#endif
+  if (!SD.begin(chipSelect)) {
+    Serial.println("Failed to init sd card");
     // don't do anything more:
   };
-
+  createnewfile();
   if (pressure.begin())
     done_setups++;
-
+  radio.startListening();
 }
 
 
@@ -235,25 +232,34 @@ void printInt(File *datafile, int i)
   datafile->print(comma);
 }
 
+//forced statuses for testing data logging
+bool armed = false;
+int lastsent = 0;
 void loop() {
   data1 s_data;
   data2 r_data;
-  bool armed = false;
 
   takereadings(&s_data);
   //send data only if armed is false because this clogs the data collection. when armed rocket will only listen and send nothing.
   if (armed == false) {
-    radio.stopListening();
-    radio.write(&s_data, sizeof(data1));
-    radio.startListening();
-
+    if ((millis()) - lastsent > 50) {
+      radio.stopListening();
+      radio.write(&s_data, sizeof(data1));
+      radio.startListening();
+      lastsent = millis();
+    }
+    Serial.println(s_data.flight_time);
+    //Serial.println("Inside false");
     if (radio.available()) {
 
       radio.read(&r_data, sizeof(r_data));
-      if (r_data.message == 1) {
+      
+      if (r_data.message == 2) {
         armed = true;
         arm_time = millis();
+        radio.startListening();
         r_data.message = 999; //done to avoid doing same process twice
+        delay(100);
       }
 
       if (r_data.message == 3) {
@@ -266,14 +272,14 @@ void loop() {
         radio.stopListening();
         s_data.current_stat = 2;
         radio.write(&s_data, sizeof(s_data)); //to notify status of rocket
-        File datafile = SD.open(filename);
-
+        datafile = SD.open(filename);
 
         while (datafile.available()) {
           char file_content = datafile.read();
           radio.write(&file_content, sizeof(file_content));
         }
         s_data.current_stat = 3; //notify controler transfer done
+        radio.startListening();
       }
       if (r_data.message == 6) {
         createnewfile();
@@ -293,22 +299,25 @@ void loop() {
     if (s_data.pres - prevalt > 0.5) {
       deploy();
     }
-    
-    File datafile = SD.open(filename, FILE_WRITE);
+
+    datafile = SD.open(filename, FILE_WRITE);
     printInt(&datafile, s_data.flight_time);
     printFloat(&datafile, s_data.pres, false);
     printFloat(&datafile, s_data.alt, false);
     printInt(&datafile, s_data.tem);
     printFloat(&datafile, s_data.ppm, true);
     datafile.close();
-    radio.read(&r_data, sizeof(r_data));
-    if (r_data.message == 3) {
-      deploy();
-      r_data.message = 999;
-    }
-    if (r_data.message == 2) {
-      armed = false;
-      r_data.message = 999;
+    if (radio.available()) {
+      radio.read(&r_data, sizeof(r_data));
+      Serial.println(r_data.message);
+      if (r_data.message == 3) {
+        deploy();
+        r_data.message = 999;
+      }
+      if (r_data.message == 2) {
+        armed = false;
+        r_data.message = 999;
+      }
     }
   }
 }
