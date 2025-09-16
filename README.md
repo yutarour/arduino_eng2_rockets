@@ -77,7 +77,8 @@ Used to log some simple data using Arduino Uno and a rocket made with two liter 
 
 ## Roadmap
 
-See the [open issues](https://github.com/Yaurrdautia/arduino_eng2_rockets/issues) for a list of proposed features (and known issues).
+- See the [open issues](https://github.com/Yaurrdautia/arduino_eng2_rockets/issues) for a list of proposed features (and known issues).
+- There aren't any plans to further develop this piece of firmware, but anyone can feel free to use/modify this software. I will try my best to respond to questions/concerns.
 
 ## Contributing
 
@@ -101,5 +102,5 @@ Distributed under the MIT License. See [LICENSE](https://github.com/Yaurrdautia/
 
 ## Authors
 
-* **Yaurrdautia** - *Student at Tesla STEM* - [Yaurrdautia](https://github.com/Yaurrdautia) - *Main code dev for project*
+* **yutarour** - *Student at Tesla STEM* - [Yaurrdautia](https://github.com/yutarour) - *Main code dev for project*
 
